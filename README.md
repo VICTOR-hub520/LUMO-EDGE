@@ -16,19 +16,24 @@ LUMO EDGE is an AI-assisted gold trading bot for MetaTrader 5. It is designed fo
 
 ## Quick start
 
-1. Create a Python virtual environment.
+1. On Windows, install Python 3.11 or newer and create a virtual environment.
 2. Install dependencies: `pip install -r requirements.txt`
-3. Copy `.env.example` to `.env` and set MT5 credentials if needed.
-4. Run: `python app.py`
-5. Launch the dashboard: `streamlit run dashboard.py`
+3. Install and open the MetaTrader 5 desktop terminal, then sign in to a **demo account**.
+4. Copy `.env.example` to `.env`; leave credentials blank to use the terminal's signed-in account.
+   If using explicit login settings, set `MT5_LOGIN`, `MT5_PASSWORD`, and `MT5_SERVER` together.
+5. Set `SYMBOL` to the broker's gold symbol if it differs from `XAUUSD`.
+6. Run `python app.py` for a read-only connection and market-data check.
+7. Launch the local dashboard with `streamlit run dashboard.py`.
+
+The connector reads account details, quotes, and completed candles only. This setup does
+not place, modify, or close trades.
 
 ## Streamlit Community Cloud
 
 Deploy the repository's `main` branch and select `dashboard.py` as the app's main file.
-The hosted dashboard is a status/landing page only: Streamlit Community Cloud cannot
-connect to an MT5 terminal running on your personal Windows computer. It therefore
-shows unavailable account and market data rather than simulated values. Run the
-trading application locally on a Windows machine with MT5 installed for broker access.
+Streamlit Community Cloud cannot connect to an MT5 terminal running on your personal
+Windows computer. The hosted app therefore shows an offline status; run the dashboard
+locally on the same Windows computer as MT5 to read broker data.
 
 ## Safety notes
 

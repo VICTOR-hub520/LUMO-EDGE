@@ -63,6 +63,11 @@ class Config:
             bot_name=os.getenv("BOT_NAME", "LUMO EDGE"),
             owner=os.getenv("OWNER", "GONTSE"),
             symbol=os.getenv("SYMBOL", "XAUUSD"),
+            symbol_aliases=tuple(
+                symbol.strip()
+                for symbol in os.getenv("SYMBOL_ALIASES", "XAUUSD,XAUUSDm,GOLD").split(",")
+                if symbol.strip()
+            ),
             timeframe=os.getenv("TIMEFRAME", "M5"),
             max_daily_trades=int(os.getenv("MAX_DAILY_TRADES", "5")),
             risk_per_trade=float(os.getenv("DEFAULT_RISK_PER_TRADE", "0.01")),
