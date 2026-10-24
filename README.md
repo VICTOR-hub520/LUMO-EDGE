@@ -22,9 +22,17 @@ LUMO EDGE is an AI-assisted gold trading bot for MetaTrader 5. It is designed fo
 4. Run: `python app.py`
 5. Launch the dashboard: `streamlit run dashboard.py`
 
+## Streamlit Community Cloud
+
+Deploy the repository's `main` branch and select `dashboard.py` as the app's main file.
+The hosted dashboard is a status/landing page only: Streamlit Community Cloud cannot
+connect to an MT5 terminal running on your personal Windows computer. It therefore
+shows unavailable account and market data rather than simulated values. Run the
+trading application locally on a Windows machine with MT5 installed for broker access.
+
 ## Safety notes
 
 - Live trading remains disabled by default.
-- The bot never bypasses the risk manager.
-- All orders must be validated before execution.
+- The hosted dashboard does not submit or manage orders.
+- The current project is a development scaffold and is not ready for live trading.
 - Use demo mode before any live trading.
