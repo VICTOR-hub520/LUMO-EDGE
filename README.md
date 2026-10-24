@@ -1,4 +1,4 @@
-# LUMO EDGE
+# LUMO-EDGE
 
 LUMO EDGE is an AI-assisted gold trading bot for MetaTrader 5. It is designed for demo testing first, with safety controls and a modular architecture that keeps the trading logic, risk policy, AI filter, and execution layer separate.
 
