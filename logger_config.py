@@ -2,9 +2,9 @@ import logging
 from pathlib import Path
 
 
-def configure_logging(log_dir: str = "logs", log_file: str = "lumo_edge.log") -> logging.Logger:
+def configure_logging(log_dir: str = "logs", log_file: str = "forex_bot.log") -> logging.Logger:
     Path(log_dir).mkdir(exist_ok=True, parents=True)
-    logger = logging.getLogger("lumo_edge")
+    logger = logging.getLogger("forex_bot")
     logger.setLevel(logging.INFO)
     logger.propagate = False
 

@@ -7,7 +7,7 @@ from typing import Any
 
 
 class Database:
-    def __init__(self, db_path: str = "data/lumo_edge.db") -> None:
+    def __init__(self, db_path: str = "data/forex_bot.db") -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(exist_ok=True, parents=True)
         self.conn = sqlite3.connect(self.db_path)

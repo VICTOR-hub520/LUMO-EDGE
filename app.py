@@ -10,8 +10,8 @@ from strategy import Strategy
 def main() -> None:
     config = Config.from_env()
     config.validate()
-    logger = configure_logging(log_dir="logs", log_file="lumo_edge.log")
-    logger.info("Starting LUMO EDGE")
+    logger = configure_logging(log_dir="logs", log_file="forex_bot.log")
+    logger.info("Starting Forex Bot")
 
     connector = MT5Connector()
     if not connector.connect():

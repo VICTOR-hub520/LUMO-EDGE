@@ -16,25 +16,25 @@ def apply_styles() -> None:
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
         :root {
-            --lumo-bg: #0b1017;
-            --lumo-panel: #121a24;
-            --lumo-panel-raised: #17222e;
-            --lumo-border: rgba(155, 179, 197, 0.14);
-            --lumo-text: #edf4f7;
-            --lumo-muted: #8fa2b1;
-            --lumo-accent: #e9b949;
-            --lumo-cyan: #59d4c4;
-            --lumo-blue: #76a9ff;
-            --lumo-violet: #bd91ff;
+            --forex-bg: #0b1017;
+            --forex-panel: #121a24;
+            --forex-panel-raised: #17222e;
+            --forex-border: rgba(155, 179, 197, 0.14);
+            --forex-text: #edf4f7;
+            --forex-muted: #8fa2b1;
+            --forex-accent: #e9b949;
+            --forex-cyan: #59d4c4;
+            --forex-blue: #76a9ff;
+            --forex-violet: #bd91ff;
         }
 
         .stApp {
-            color: var(--lumo-text);
+            color: var(--forex-text);
             background:
                 radial-gradient(ellipse at 8% 4%, rgba(89, 212, 196, 0.15), transparent 31%),
                 radial-gradient(ellipse at 96% 8%, rgba(233, 185, 73, 0.14), transparent 28%),
                 radial-gradient(ellipse at 70% 70%, rgba(118, 169, 255, 0.06), transparent 42%),
-                var(--lumo-bg);
+                var(--forex-bg);
             font-family: 'DM Sans', sans-serif;
         }
 
@@ -49,7 +49,7 @@ def apply_styles() -> None:
         }
 
         h1, h2, h3 {
-            color: var(--lumo-text);
+            color: var(--forex-text);
             font-family: 'Space Grotesk', sans-serif;
             letter-spacing: -0.035em;
         }
@@ -68,7 +68,7 @@ def apply_styles() -> None:
             position: relative;
             margin-top: 2rem !important;
             padding-bottom: 0.65rem;
-            border-bottom: 1px solid var(--lumo-border);
+            border-bottom: 1px solid var(--forex-border);
             color: #dce9ee;
             font-size: 1.45rem !important;
         }
@@ -79,26 +79,26 @@ def apply_styles() -> None:
             left: 0;
             width: 54px;
             height: 2px;
-            background: linear-gradient(90deg, var(--lumo-accent), var(--lumo-cyan));
+            background: linear-gradient(90deg, var(--forex-accent), var(--forex-cyan));
             content: "";
         }
 
         h3 {
-            color: var(--lumo-muted);
+            color: var(--forex-muted);
             font-family: 'DM Sans', sans-serif;
             font-size: 1rem !important;
             font-weight: 500 !important;
         }
 
         [data-testid="stCaptionContainer"] {
-            color: var(--lumo-muted);
+            color: var(--forex-muted);
             font-size: 0.92rem;
         }
 
         [data-testid="stMetric"] {
             min-height: 116px;
             padding: 1.15rem 1.25rem;
-            border: 1px solid var(--lumo-border);
+            border: 1px solid var(--forex-border);
             border-radius: 16px;
             background:
                 linear-gradient(145deg, rgba(23, 34, 46, 0.96), rgba(16, 24, 33, 0.96));
@@ -124,19 +124,19 @@ def apply_styles() -> None:
         }
 
         [data-testid="stMetricLabel"] {
-            color: var(--lumo-muted);
+            color: var(--forex-muted);
             font-size: 0.85rem;
         }
 
         [data-testid="stMetricValue"] {
-            color: var(--lumo-text);
+            color: var(--forex-text);
             font-family: 'Space Grotesk', sans-serif;
             font-size: 1.4rem;
         }
 
         [data-testid="stAlert"] {
             border: 1px solid rgba(233, 185, 73, 0.32);
-            border-left: 4px solid var(--lumo-accent);
+            border-left: 4px solid var(--forex-accent);
             border-radius: 14px;
             background: rgba(233, 185, 73, 0.08);
         }
@@ -147,7 +147,7 @@ def apply_styles() -> None:
 
         [data-testid="stAlert"]:has([data-testid="stNotificationContentInfo"]) {
             border-color: rgba(89, 212, 196, 0.26);
-            border-left-color: var(--lumo-cyan);
+            border-left-color: var(--forex-cyan);
             background: rgba(89, 212, 196, 0.07);
         }
 
@@ -161,15 +161,15 @@ def apply_styles() -> None:
         }
 
         [data-testid="stMarkdownContainer"] strong {
-            color: var(--lumo-accent);
+            color: var(--forex-accent);
         }
 
         [data-testid="stMarkdownContainer"] a {
-            color: var(--lumo-cyan);
+            color: var(--forex-cyan);
         }
 
         hr {
-            border-color: var(--lumo-border);
+            border-color: var(--forex-border);
             margin: 2rem 0;
         }
 
@@ -190,13 +190,13 @@ def apply_styles() -> None:
 
 
 def render_dashboard() -> None:
-    st.set_page_config(page_title="LUMO-EDGE | Gold Trading", page_icon="🟡", layout="wide")
+    st.set_page_config(page_title="Forex Bot | Gold Trading", page_icon="🟡", layout="wide")
     apply_styles()
 
     config = Config.from_env()
     config.validate()
 
-    st.title("LUMO-EDGE")
+    st.title("Forex Bot")
     st.subheader("AI-assisted gold trading dashboard")
     st.caption("Owned by GONTSE")
 

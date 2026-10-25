@@ -19,7 +19,7 @@ def _coerce_bool(value: str | None, default: bool = False) -> bool:
 
 @dataclass
 class Config:
-    bot_name: str = "LUMO EDGE"
+    bot_name: str = "Forex Bot"
     owner: str = "GONTSE"
     symbol: str = "XAUUSD"
     symbol_aliases: tuple[str, ...] = ("XAUUSD", "XAUUSDm", "GOLD")
@@ -50,7 +50,7 @@ class Config:
     timezone: str = "UTC"
     data_dir: str = "data"
     logs_dir: str = "logs"
-    db_path: str = "data/lumo_edge.db"
+    db_path: str = "data/forex_bot.db"
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -60,7 +60,7 @@ class Config:
             load_dotenv(dotenv_path=env_path, override=False)
 
         cfg = cls(
-            bot_name=os.getenv("BOT_NAME", "LUMO EDGE"),
+            bot_name=os.getenv("BOT_NAME", "Forex Bot"),
             owner=os.getenv("OWNER", "GONTSE"),
             symbol=os.getenv("SYMBOL", "XAUUSD"),
             symbol_aliases=tuple(
