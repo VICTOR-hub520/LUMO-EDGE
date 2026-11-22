@@ -1,9 +1,14 @@
+.env
 __pycache__/
 *.pyc
-.env
-.venv/
-venv/
 .pytest_cache/
 logs/*.log
 data/*.db
 models/*.pkl
+/build/
+/desktop/node_modules/
+/desktop/dist/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Testing/

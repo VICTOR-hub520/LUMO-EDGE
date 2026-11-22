@@ -1,33 +1,34 @@
 {
-  "name": "Python 3",
+  "name": "Lumo Edge C++",
   // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-  "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bookworm",
+  "image": "mcr.microsoft.com/devcontainers/cpp:1-ubuntu-24.04",
   "customizations": {
     "codespaces": {
       "openFiles": [
         "README.md",
-        "app.py"
+        "src/main.cpp",
+        "web/index.html"
       ]
     },
     "vscode": {
-      "settings": {},
+      "settings": {
+        "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+        "cmake.configureOnOpen": true
+      },
       "extensions": [
-        "ms-python.python",
-        "ms-python.vscode-pylance"
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools"
       ]
     }
   },
-  "updateContentCommand": "[ -f packages.txt ] && sudo apt update && sudo apt upgrade -y && sudo xargs apt install -y <packages.txt; [ -f requirements.txt ] && pip3 install --user -r requirements.txt; pip3 install --user streamlit; echo '✅ Packages installed and Requirements met'",
-  "postAttachCommand": {
-    "server": "streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false"
-  },
+  "postCreateCommand": "if [ ! -d \"$HOME/vcpkg/.git\" ]; then git clone https://github.com/microsoft/vcpkg.git \"$HOME/vcpkg\"; fi && \"$HOME/vcpkg/bootstrap-vcpkg.sh\" -disableMetrics && cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=\"$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake\"",
   "portsAttributes": {
-    "8501": {
+    "8080": {
       "label": "Application",
-      "onAutoForward": "openPreview"
+      "onAutoForward": "openBrowser"
     }
   },
   "forwardPorts": [
-    8501
+    8080
   ]
 }

@@ -1,0 +1,335 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build and launch Lumo Edge",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"start"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "Build Lumo Edge backend",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"--prefix",
+				"desktop",
+				"run",
+				"build:backend"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check build tool availability",
+			"type": "shell",
+			"command": "where.exe",
+			"args": [
+				"node.exe",
+				"npm.cmd",
+				"cmake.exe",
+				"cl.exe",
+				"metaeditor64.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check installers and compiler",
+			"type": "shell",
+			"command": "where.exe",
+			"args": [
+				"winget.exe",
+				"git.exe",
+				"vswhere.exe",
+				"cl.exe",
+				"vcpkg.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Windows package IDs",
+			"type": "shell",
+			"command": "winget",
+			"args": [
+				"search",
+				"--id",
+				"OpenJS.NodeJS.LTS",
+				"--exact",
+				"--accept-source-agreements"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check CMake package ID",
+			"type": "shell",
+			"command": "winget",
+			"args": [
+				"search",
+				"--id",
+				"Kitware.CMake",
+				"--exact",
+				"--accept-source-agreements"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Visual Studio package ID",
+			"type": "shell",
+			"command": "winget",
+			"args": [
+				"search",
+				"--id",
+				"Microsoft.VisualStudio.2022.BuildTools",
+				"--exact",
+				"--accept-source-agreements"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Install Node.js LTS",
+			"type": "shell",
+			"command": "winget",
+			"args": [
+				"install",
+				"--id",
+				"OpenJS.NodeJS.LTS",
+				"--exact",
+				"--accept-package-agreements",
+				"--accept-source-agreements",
+				"--silent"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Install CMake",
+			"type": "shell",
+			"command": "winget",
+			"args": [
+				"install",
+				"--id",
+				"Kitware.CMake",
+				"--exact",
+				"--accept-package-agreements",
+				"--accept-source-agreements",
+				"--silent"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Install Visual C++ build tools",
+			"type": "shell",
+			"command": "winget",
+			"args": [
+				"install",
+				"--id",
+				"Microsoft.VisualStudio.2022.BuildTools",
+				"--exact",
+				"--accept-package-agreements",
+				"--accept-source-agreements",
+				"--silent",
+				"--override",
+				"--wait --quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "Verify Node and CMake",
+			"type": "shell",
+			"command": "where.exe",
+			"args": [
+				"node.exe",
+				"npm.cmd",
+				"cmake.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect installer progress",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"msiexec",
+				"winget",
+				"vs_BuildTools"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check installer processes",
+			"type": "shell",
+			"command": "Get-Process -Name msiexec,winget,vs_BuildTools | Select-Object ProcessName,Id,CPU",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Install vcpkg package manager",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"clone",
+				"https://github.com/microsoft/vcpkg.git",
+				"C:\\Users\\User\\vcpkg"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check build tool installation status",
+			"type": "shell",
+			"command": "Get-Process -Name msiexec,winget,vs_installer,setup | Select-Object ProcessName,Id,CPU",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check vcpkg checkout",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"-C",
+				"C:\\Users\\User\\vcpkg",
+				"status",
+				"--short",
+				"--branch"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Retry vcpkg shallow checkout",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"clone",
+				"--depth",
+				"1",
+				"https://github.com/microsoft/vcpkg.git",
+				"C:\\Users\\User\\vcpkg"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Verify Git task runner",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"--version"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check vcpkg shallow clone",
+			"type": "shell",
+			"command": "Test-Path C:\\Users\\User\\vcpkg\\.git; Get-ChildItem C:\\Users\\User\\vcpkg -Force | Select-Object -First 5 Name",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Download vcpkg shallow checkout",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"clone",
+				"--depth",
+				"1",
+				"--filter=blob:none",
+				"--single-branch",
+				"https://github.com/microsoft/vcpkg.git",
+				"C:\\Users\\User\\vcpkg"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "Search vcpkg package",
+			"type": "shell",
+			"command": "winget",
+			"args": [
+				"search",
+				"vcpkg",
+				"--accept-source-agreements"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Verify installed Node runtime",
+			"type": "shell",
+			"command": "C:\\Program Files\\nodejs\\node.exe",
+			"args": [
+				"--version"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check MT5 editor",
+			"type": "shell",
+			"command": "Get-Process -Name terminal64,metaeditor64 -ErrorAction SilentlyContinue | Select-Object ProcessName,Id",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Install desktop npm dependencies",
+			"type": "shell",
+			"command": "C:\\Program Files\\nodejs\\npm.cmd",
+			"args": [
+				"--prefix",
+				"desktop",
+				"install"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Retry desktop dependency install",
+			"type": "shell",
+			"command": "$env:PATH = 'C:\\Program Files\\nodejs;' + $env:PATH; & 'C:\\Program Files\\nodejs\\npm.cmd' --prefix desktop install",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Find vcpkg installer",
+			"type": "shell",
+			"command": "winget search vcpkg --accept-source-agreements",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check desktop install progress",
+			"type": "shell",
+			"command": "Get-Process -Name node,npm,cmake,cl,vs_installer,msiexec,winget -ErrorAction SilentlyContinue | Select-Object ProcessName,Id,CPU",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check running install tools",
+			"type": "shell",
+			"command": "Get-Process -Name node,winget,git,msiexec -ErrorAction SilentlyContinue | Select-Object ProcessName,Id,CPU",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check final repository changes",
+			"type": "shell",
+			"command": "git status --short",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

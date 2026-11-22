@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0b1017">
+    <title>Forex Bot | Gold Market Dashboard</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <dialog id="profile-dialog" class="profile-dialog">
+      <form id="profile-form" class="profile-form">
+        <p class="eyebrow">WELCOME TO LUMO EDGE</p>
+        <h1>Set up your profile</h1>
+        <p class="muted">Choose a display name for this app. MT5 credentials stay in your terminal.</p>
+        <label for="profile-label">Profile name</label>
+        <input id="profile-label" name="profile-label" maxlength="40" autocomplete="nickname" required>
+        <p id="profile-error" class="profile-error" role="alert"></p>
+        <button type="submit">Continue to dashboard</button>
+      </form>
+    </dialog>
+
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">LUMO EDGE · READ-ONLY MARKET VIEW</p>
+          <h1>Lumo Edge</h1>
+          <p class="subtitle">Gold market dashboard <span id="owner">· Profile not set</span></p>
+        </div>
+        <div class="hero-actions">
+          <span id="last-updated" class="muted">Waiting for MT5 bridge</span>
+          <button id="refresh" type="button">Refresh</button>
+        </div>
+      </header>
+
+      <div id="notice" class="notice" role="status">
+        Waiting for read-only data from the MT5 bridge. Start the bridge in your terminal
+        and allow <code>http://127.0.0.1:8080</code> in MT5's WebRequest settings.
+      </div>
+
+      <section class="connection-panel" aria-labelledby="connection-heading">
+        <div class="section-heading">
+          <div><p class="eyebrow">PERSONAL MT5 TERMINAL</p><h2 id="connection-heading">Connect account</h2></div>
+        </div>
+        <p class="muted">Sign in to your account in MT5 and attach the Lumo Edge bridge first. Enter the login and broker server shown by MT5 so Lumo Edge can verify the terminal account. Your MT5 password stays in the terminal and is never requested here.</p>
+        <form id="mt5-connection-form" class="connection-form">
+          <label for="mt5-login">MT5 account ID (login number)
+            <input id="mt5-login" name="login" type="text" inputmode="numeric" pattern="[0-9]+" maxlength="16" autocomplete="off" required>
+          </label>
+          <label for="mt5-server">Broker server name
+            <input id="mt5-server" name="server" type="text" maxlength="128" autocomplete="off" required>
+          </label>
+          <div class="connection-actions">
+            <button id="connect-mt5" type="submit">Connect</button>
+            <button id="disconnect-mt5" type="button" disabled>Disconnect</button>
+          </div>
+        </form>
+        <p id="connection-feedback" class="connection-feedback" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="grid three" aria-label="Connection status">
+        <article class="card accent-gold"><p class="label">MT5 connection</p><p id="connection" class="value">Offline</p></article>
+        <article class="card accent-cyan"><p class="label">Connected account · mode</p><p id="account-mode" class="value">Not connected</p></article>
+        <article class="card accent-blue"><p class="label">Broker symbol · timeframe</p><p id="instrument" class="value">XAUUSD · M5</p></article>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <div><p class="eyebrow">LIVE FROM YOUR TERMINAL</p><h2>Market scanner</h2></div>
+          <span id="signal-badge" class="badge neutral">NO DATA</span>
+        </div>
+        <div class="grid three">
+          <article class="card accent-gold"><p class="label">Bid / ask</p><p id="bid-ask" class="value">Unavailable</p></article>
+          <article class="card accent-cyan"><p class="label">Spread</p><p id="spread" class="value">Unavailable</p></article>
+          <article class="card accent-violet"><p class="label">Rule-based signal</p><p id="signal" class="value">Unavailable</p></article>
+        </div>
+        <div class="grid three metrics">
+          <article class="card"><p class="label">EMA fast</p><p id="ema-fast" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">EMA slow</p><p id="ema-slow" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">RSI · ATR</p><p id="rsi-atr" class="value">Unavailable</p></article>
+        </div>
+        <p id="signal-reason" class="signal-reason">No verified market data received.</p>
+      </section>
+
+      <section id="market-observability">
+        <div class="section-heading">
+          <div><p class="eyebrow">RULE-BASED · VERIFIED MT5 DATA</p><h2>Market observability</h2></div>
+          <span id="observation-badge" class="badge neutral">WAITING</span>
+        </div>
+        <div class="grid three">
+          <article class="card accent-cyan"><p class="label">Market direction</p><p id="observation-trend" class="value">Unavailable</p></article>
+          <article class="card accent-violet"><p class="label">Volatility · ATR vs baseline</p><p id="observation-volatility" class="value">Unavailable</p></article>
+          <article class="card accent-gold"><p class="label">Current strategy signal</p><p id="observation-signal" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">20-candle support · resistance</p><p id="observation-levels" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">SMA 20 · SMA 50</p><p id="observation-sma" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">MACD · signal line</p><p id="observation-macd" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">Last candle pattern</p><p id="observation-pattern" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">Tick volume vs 20-candle average</p><p id="observation-volume" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">Spread · market session</p><p id="observation-cost-session" class="value">Unavailable</p></article>
+        </div>
+        <p id="observation-report" class="signal-reason">Waiting for sufficient fresh MT5 candles.</p>
+        <div class="section-heading observability-heading">
+          <h3>Price with observed support/resistance</h3>
+          <span id="observation-updated" class="muted">No observation yet</span>
+        </div>
+        <div class="card chart-card"><svg id="observation-chart" viewBox="0 0 900 240" role="img" aria-label="Recent verified prices with support and resistance levels"></svg></div>
+
+        <div class="section-heading observability-heading"><h3>Decision protocol</h3></div>
+        <ol id="decision-protocol" class="protocol-list">
+          <li>Waiting for fresh, verified MT5 data</li>
+        </ol>
+        <div class="observability-grid">
+          <div>
+            <h3>System alerts</h3>
+            <ul id="system-alerts" class="alert-list"><li>Waiting for a connected MT5 account.</li></ul>
+          </div>
+          <div>
+            <h3>Scope and data availability</h3>
+            <p id="observability-limitations" class="muted">No individual position history or economic-news provider is connected.</p>
+          </div>
+        </div>
+
+        <div class="section-heading observability-heading">
+          <div><h3>Historical observation review</h3><span id="observation-history-status" class="muted">Loading observations</span></div>
+        </div>
+        <div class="grid three">
+          <article class="card"><p class="label">Next-candle direction matches</p><p id="observation-accuracy" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">Completed directional evaluations</p><p id="observation-evaluations" class="value">0</p></article>
+          <article class="card"><p class="label">Learning policy</p><p class="value">Recommendations only</p></article>
+        </div>
+        <p id="observation-insight" class="muted">Historical evaluation will appear after new observations and subsequent MT5 candles arrive. No strategy settings are changed automatically.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Observed</th><th>Market state</th><th>Trend prediction</th><th>Next candle</th><th>Review</th></tr></thead>
+            <tbody id="observation-history"><tr><td colspan="5">No persisted observations yet.</td></tr></tbody>
+          </table>
+        </div>
+        <div class="observability-grid post-trade-note">
+          <div><h3>Active MT5 positions</h3><p id="observed-positions" class="muted">Unavailable</p></div>
+          <div><h3>Trade outcomes and post-trade review</h3><p class="muted">This bridge does not transmit per-trade tickets, entries/exits, or closed-deal history. Actual trade performance, lifecycle analysis, and post-trade recommendations are therefore unavailable; the read-only dashboard will not infer or fabricate them.</p></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <div><p class="eyebrow">ACCOUNT SNAPSHOT</p><h2>Account and risk</h2></div>
+        </div>
+        <div class="grid three">
+          <article class="card accent-gold"><p class="label">Account balance</p><p id="balance" class="value">Unavailable</p></article>
+          <article class="card accent-cyan"><p class="label">Account equity</p><p id="equity" class="value">Unavailable</p></article>
+          <article class="card accent-blue"><p class="label">Today's net P&amp;L</p><p id="day-pnl" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">Floating P&amp;L</p><p id="floating-pnl" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">Used margin · free margin</p><p id="margin" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">Open positions · volume</p><p id="positions" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">Risk at broker stop losses</p><p id="open-risk" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">Day loss · configured limit</p><p id="daily-loss" class="value">Unavailable</p></article>
+          <article class="card"><p class="label">Account leverage</p><p id="leverage" class="value">Unavailable</p></article>
+        </div>
+        <div id="risk-warnings" class="risk-warnings" aria-live="polite"></div>
+        <div id="bridge-security" class="notice" role="status"></div>
+      </section>
+
+      <section class="chart-section">
+        <div class="section-heading">
+          <div><p class="eyebrow">CLOSED CANDLES</p><h2>Recent price</h2></div>
+          <span id="chart-symbol" class="muted">Waiting for candles</span>
+        </div>
+        <div class="card chart-card"><svg id="price-chart" viewBox="0 0 900 240" role="img" aria-label="Recent closing prices"></svg></div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <div><p class="eyebrow">LOCAL HISTORICAL SIMULATION</p><h2>Backtest</h2></div>
+          <button id="run-backtest" type="button">Run backtest</button>
+        </div>
+        <div id="backtest-result" class="card backtest-result" aria-live="polite">
+          Uses the latest verified candles when you request it. Costs and slippage are not modeled.
+        </div>
+        <p class="muted">Past simulation is not a forecast. Results are informational and exclude spread, commissions, swap, and execution delay.</p>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <div><p class="eyebrow">PERSISTED IN SQLITE</p><h2>Signal history</h2></div>
+          <span id="history-status" class="muted">Loading history</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Symbol</th><th>Direction</th><th>Confidence</th><th>Reason</th></tr></thead>
+            <tbody id="signal-history"><tr><td colspan="5">No saved signals yet.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer>
+        <p>This dashboard reads account and market data only. It never submits, modifies, or closes orders.</p>
+        <p>Data is not simulated. A stale connection is marked offline; verify all information in your MT5 terminal.</p>
+      </footer>
+    </main>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

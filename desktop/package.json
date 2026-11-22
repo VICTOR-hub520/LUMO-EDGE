@@ -1,0 +1,46 @@
+{
+  "name": "lumo-edge-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Windows desktop shell for the read-only Lumo Edge MT5 dashboard",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "build:backend": "node build-backend.cjs",
+    "dist:win": "npm run build:backend && electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.lumoedge.desktop",
+    "productName": "Lumo Edge",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../build/Release/lumo-edge.exe",
+        "to": "backend/lumo-edge.exe"
+      },
+      {
+        "from": "../web",
+        "to": "web"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
