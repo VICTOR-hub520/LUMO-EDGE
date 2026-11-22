@@ -8,6 +8,10 @@ models/*.pkl
 /build/
 /desktop/node_modules/
 /desktop/dist/
+/mobile/android/app/google-services.json
+/mobile/android/local.properties
+/mobile/android/.gradle/
+/mobile/android/app/build/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake

@@ -22,7 +22,8 @@ struct Config {
     int port = 8080;
     double risk_per_trade = 0.01;
     double max_risk_per_trade = 0.03;
-    double daily_loss_limit = 0.03;
+    double max_open_risk_percent = 0.03;
+    double daily_loss_limit = 0.10;
     double requested_lot_size = 0.10;
     double min_lot = 0.01;
     double max_lot = 20.0;
@@ -33,6 +34,7 @@ struct Config {
     double backtest_reward_risk = 2.0;
     std::string bridge_token;
     std::string database_path = "data/forex_bot.db";
+    bool auto_trading_enabled = false;
     bool live_trading_enabled = false;
     bool emergency_stop = false;
     bool trading_lock = false;
@@ -81,6 +83,7 @@ struct Account {
     int positions_risk_unavailable = 0;
     std::int64_t login = 0;
     int leverage = 0;
+    int daily_trade_count = 0;
 };
 
 struct Quote {
@@ -94,6 +97,7 @@ struct Quote {
 struct Snapshot {
     std::string symbol;
     std::string timeframe;
+    bool execution_enabled = false;
     Account account;
     Quote quote;
     std::vector<Candle> candles;
@@ -168,6 +172,16 @@ struct PositionCommand {
     std::string reason;
 };
 
+struct ExecutionDecision {
+    std::string action = "DISABLED";
+    std::string direction = "NO_TRADE";
+    std::string reason = "Automated execution is disabled";
+    double stop_loss = 0.0;
+    double take_profit = 0.0;
+    double risk_per_trade = 0.0;
+    double max_open_risk_percent = 0.0;
+};
+
 class RiskManager {
 public:
     explicit RiskManager(const Config& config);
@@ -216,6 +230,11 @@ BacktestResult run_backtest(const std::vector<Candle>& candles,
 std::vector<PositionCommand> manage_positions(
     const std::vector<BrokerPosition>& positions,
     std::optional<double> stop_loss, std::optional<double> take_profit);
+ExecutionDecision decide_execution(const Config& config,
+                                   const Snapshot& snapshot,
+                                   const MarketObservation& observation,
+                                   bool new_candle,
+                                   bool account_matches);
 bool account_matches(const Account& account, std::int64_t login,
                      std::string_view server);
 void validate_snapshot(const Snapshot& snapshot, const Config& config);

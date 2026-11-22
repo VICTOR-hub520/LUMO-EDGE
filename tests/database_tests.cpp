@@ -57,6 +57,39 @@ void test_database_persists_signal_history_and_state() {
                "{\"classification\":\"Weak bullish\"}");
         assert(database.recent_observations(10, 654321, "Broker-Demo")
                    .front().actual_direction.empty());
+        lumo::TradeEventRecord event;
+        event.deal_ticket = 9001;
+        event.position_id = 8001;
+        event.order_id = 7001;
+        event.account_login = 123456;
+        event.magic = 24680;
+        event.event_time = 1'700'000'400;
+        event.account_server = "Broker-Demo";
+        event.symbol = "XAUUSDm";
+        event.direction = "BUY";
+        event.status = "OPENED";
+        event.price = 2301.25;
+        event.stop_loss = 2298.0;
+        event.take_profit = 2307.75;
+        event.volume = 0.1;
+        event.pnl = 0.0;
+        assert(database.save_trade_event(event));
+        assert(!database.save_trade_event(event));
+        event.account_server = "BROKER-DEMO";
+        assert(!database.save_trade_event(event));
+        event.account_server = "Broker-Demo";
+        auto trade_events =
+            database.recent_trade_events(10, 123456, "broker-demo");
+        assert(trade_events.size() == 1);
+        assert(trade_events.front().deal_ticket == event.deal_ticket);
+        assert(trade_events.front().account_server == event.account_server);
+        assert(trade_events.front().symbol == event.symbol);
+        assert(trade_events.front().price == event.price);
+        assert(database.recent_trade_events(10, 654321, "Broker-Demo").empty());
+        event.account_login = 654321;
+        event.account_server = "Broker-Demo";
+        assert(database.save_trade_event(event));
+        assert(database.recent_trade_events(10, 654321, "broker-demo").size() == 1);
     }
     remove_database_files(path);
 }

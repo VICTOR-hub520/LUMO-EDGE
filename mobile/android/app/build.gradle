@@ -1,0 +1,25 @@
+plugins {
+    id "com.android.application"
+}
+
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+}
+
+android {
+    namespace "com.nexus.mobile"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.nexus.mobile"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0.0"
+    }
+}
+
+dependencies {
+    implementation platform("com.google.firebase:firebase-bom:33.7.0")
+    implementation "com.google.firebase:firebase-auth"
+}

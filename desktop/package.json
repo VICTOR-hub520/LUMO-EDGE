@@ -1,8 +1,8 @@
 {
-  "name": "lumo-edge-desktop",
+  "name": "nexus-desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "Windows desktop shell for the read-only Lumo Edge MT5 dashboard",
+  "description": "Windows desktop shell for the NEXUS MT5 market dashboard",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
@@ -14,8 +14,8 @@
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "com.lumoedge.desktop",
-    "productName": "Lumo Edge",
+    "appId": "com.nexus.desktop",
+    "productName": "NEXUS",
     "directories": {
       "output": "dist"
     },

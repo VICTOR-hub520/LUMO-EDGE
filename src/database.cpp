@@ -105,12 +105,23 @@ Database::Database(const std::string& path) {
         "reference_close REAL NOT NULL, "
         "predicted_direction TEXT NOT NULL, actual_direction TEXT NOT NULL DEFAULT '', "
         "evaluated_at INTEGER, payload TEXT NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS trade_events ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "account_login INTEGER NOT NULL, account_server TEXT NOT NULL COLLATE NOCASE, "
+        "deal_ticket INTEGER NOT NULL, position_id INTEGER NOT NULL, "
+        "order_id INTEGER NOT NULL, magic INTEGER NOT NULL, symbol TEXT NOT NULL, "
+        "direction TEXT NOT NULL, status TEXT NOT NULL, price REAL NOT NULL, "
+        "stop_loss REAL NOT NULL, take_profit REAL NOT NULL, volume REAL NOT NULL, "
+        "pnl REAL NOT NULL, event_time INTEGER NOT NULL, "
+        "UNIQUE(account_login, account_server, deal_ticket));"
         "CREATE INDEX IF NOT EXISTS signals_created_at_idx ON signals(created_at DESC);"
         "CREATE INDEX IF NOT EXISTS observations_account_time_idx "
         "ON observations(account_login, account_server, observed_at DESC);"
         "CREATE INDEX IF NOT EXISTS observations_pending_idx "
         "ON observations(account_login, account_server, symbol, actual_direction, "
-        "reference_candle_time DESC);";
+        "reference_candle_time DESC);"
+        "CREATE INDEX IF NOT EXISTS trade_events_account_time_idx "
+        "ON trade_events(account_login, account_server, event_time DESC);";
     char* error = nullptr;
     const int schema_result = sqlite3_exec(connection_, schema, nullptr, nullptr, &error);
     if (schema_result != SQLITE_OK) {
@@ -321,6 +332,79 @@ void Database::update_trade_status(std::int64_t trade_id,
     statement.bind_int64(4, trade_id);
     check_sqlite(statement.step(), connection_,
                  "Updating trade status failed");
+}
+
+bool Database::save_trade_event(const TradeEventRecord& event) {
+    std::lock_guard lock(mutex_);
+    Statement statement(
+        connection_,
+        "INSERT OR IGNORE INTO trade_events "
+        "(account_login, account_server, deal_ticket, position_id, order_id, "
+        "magic, symbol, direction, status, price, stop_loss, take_profit, "
+        "volume, pnl, event_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    statement.bind_int64(1, event.account_login);
+    statement.bind_text(2, event.account_server);
+    statement.bind_int64(3, event.deal_ticket);
+    statement.bind_int64(4, event.position_id);
+    statement.bind_int64(5, event.order_id);
+    statement.bind_int64(6, event.magic);
+    statement.bind_text(7, event.symbol);
+    statement.bind_text(8, event.direction);
+    statement.bind_text(9, event.status);
+    statement.bind_double(10, event.price);
+    statement.bind_double(11, event.stop_loss);
+    statement.bind_double(12, event.take_profit);
+    statement.bind_double(13, event.volume);
+    statement.bind_double(14, event.pnl);
+    statement.bind_int64(15, event.event_time);
+    check_sqlite(statement.step(), connection_, "Saving MT5 trade event failed");
+    return sqlite3_changes(connection_) > 0;
+}
+
+std::vector<TradeEventRecord> Database::recent_trade_events(
+    int limit, std::int64_t account_login,
+    const std::string& account_server) {
+    std::lock_guard lock(mutex_);
+    Statement statement(
+        connection_,
+        "SELECT deal_ticket, position_id, order_id, account_login, magic, "
+        "event_time, account_server, symbol, direction, status, price, "
+        "stop_loss, take_profit, volume, pnl FROM trade_events "
+        "WHERE account_login = ? AND account_server = ? COLLATE NOCASE "
+        "ORDER BY event_time DESC, id DESC LIMIT ?");
+    statement.bind_int64(1, account_login);
+    statement.bind_text(2, account_server);
+    statement.bind_int64(3, limit);
+    std::vector<TradeEventRecord> events;
+    int result = statement.step();
+    while (result == SQLITE_ROW) {
+        const auto text_column = [&statement](int column) {
+            const auto* value = sqlite3_column_text(statement.get(), column);
+            return value == nullptr
+                       ? std::string{}
+                       : std::string(reinterpret_cast<const char*>(value));
+        };
+        events.push_back({
+            sqlite3_column_int64(statement.get(), 0),
+            sqlite3_column_int64(statement.get(), 1),
+            sqlite3_column_int64(statement.get(), 2),
+            sqlite3_column_int64(statement.get(), 3),
+            sqlite3_column_int64(statement.get(), 4),
+            sqlite3_column_int64(statement.get(), 5),
+            text_column(6),
+            text_column(7),
+            text_column(8),
+            text_column(9),
+            sqlite3_column_double(statement.get(), 10),
+            sqlite3_column_double(statement.get(), 11),
+            sqlite3_column_double(statement.get(), 12),
+            sqlite3_column_double(statement.get(), 13),
+            sqlite3_column_double(statement.get(), 14),
+        });
+        result = statement.step();
+    }
+    check_sqlite(result, connection_, "Loading MT5 trade events failed");
+    return events;
 }
 
 void Database::set_state(const std::string& key, const std::string& value) {

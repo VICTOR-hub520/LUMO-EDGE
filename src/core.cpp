@@ -213,6 +213,8 @@ Config Config::from_environment() {
     config.port = env_int("LUMO_PORT", config.port);
     config.risk_per_trade = env_double("DEFAULT_RISK_PER_TRADE", config.risk_per_trade);
     config.max_risk_per_trade = env_double("MAX_RISK_PER_TRADE", config.max_risk_per_trade);
+    config.max_open_risk_percent =
+        env_double("MAX_OPEN_RISK_PERCENT", config.max_open_risk_percent);
     config.daily_loss_limit = env_double("DAILY_LOSS_LIMIT", config.daily_loss_limit);
     config.requested_lot_size = env_double("REQUESTED_LOT_SIZE", config.requested_lot_size);
     config.max_daily_trades = env_int("MAX_DAILY_TRADES", config.max_daily_trades);
@@ -223,6 +225,7 @@ Config Config::from_environment() {
         env_double("BACKTEST_REWARD_RISK", config.backtest_reward_risk);
     config.bridge_token = env_string("BRIDGE_TOKEN", config.bridge_token);
     config.database_path = env_string("DATABASE_PATH", config.database_path);
+    config.auto_trading_enabled = env_bool("AUTO_TRADING_ENABLED", false);
     config.live_trading_enabled = env_bool("LIVE_TRADING_ENABLED", false);
     config.emergency_stop = env_bool("EMERGENCY_STOP", false);
     config.trading_lock = env_bool("TRADING_LOCK", false);
@@ -249,6 +252,12 @@ void Config::validate() const {
         risk_per_trade > max_risk_per_trade || max_risk_per_trade > 1.0) {
         throw std::invalid_argument("Risk per trade must be positive, within its maximum, and at most 1");
     }
+    if (!is_finite_positive(max_open_risk_percent) ||
+        max_open_risk_percent > 1.0 ||
+        risk_per_trade > max_open_risk_percent) {
+        throw std::invalid_argument(
+            "Maximum open risk must be at least the per-trade risk and at most 1");
+    }
     if (!is_finite_positive(daily_loss_limit) || daily_loss_limit > 1.0) {
         throw std::invalid_argument("DAILY_LOSS_LIMIT must be between 0 and 1");
     }
@@ -268,6 +277,10 @@ void Config::validate() const {
     static_cast<void>(timeframe_seconds(timeframe));
     if (!bridge_token.empty() && bridge_token.size() < 32) {
         throw std::invalid_argument("BRIDGE_TOKEN must contain at least 32 characters when set");
+    }
+    if (auto_trading_enabled && bridge_token.empty()) {
+        throw std::invalid_argument(
+            "BRIDGE_TOKEN is required when AUTO_TRADING_ENABLED is true");
     }
 }
 
@@ -316,7 +329,7 @@ double RiskManager::calculate_position_size(double account_equity, double entry_
 
 bool RiskManager::can_open_trade(double account_equity, int daily_trade_count,
                                  double current_daily_loss) const {
-    if (!config_.live_trading_enabled || config_.emergency_stop ||
+    if (!config_.auto_trading_enabled || config_.emergency_stop ||
         config_.trading_lock || trade_lock_ ||
         !is_finite_positive(account_equity) ||
         daily_trade_count >= config_.max_daily_trades) {
@@ -858,6 +871,140 @@ std::vector<PositionCommand> manage_positions(
     return commands;
 }
 
+ExecutionDecision decide_execution(const Config& config,
+                                   const Snapshot& snapshot,
+                                   const MarketObservation& observation,
+                                   bool new_candle,
+                                   bool connected_to_expected_account) {
+    ExecutionDecision decision;
+    decision.risk_per_trade = config.risk_per_trade;
+    decision.max_open_risk_percent = config.max_open_risk_percent;
+
+    if (!config.auto_trading_enabled) {
+        return decision;
+    }
+    if (!snapshot.execution_enabled) {
+        decision.action = "DISABLED";
+        decision.reason = "Order execution is disabled in the MT5 bridge";
+        return decision;
+    }
+    if (!connected_to_expected_account) {
+        decision.action = "BLOCKED";
+        decision.reason = "MT5 account is not verified by the dashboard";
+        return decision;
+    }
+    if (snapshot.account.trade_mode != 0 && snapshot.account.trade_mode != 2) {
+        decision.action = "BLOCKED";
+        decision.reason = "Only demo or explicitly enabled live accounts are supported";
+        return decision;
+    }
+    if (snapshot.account.trade_mode == 2 && !config.live_trading_enabled) {
+        decision.action = "LIVE_DISABLED";
+        decision.reason = "Live trading is disabled by the server configuration";
+        return decision;
+    }
+    if (config.emergency_stop) {
+        decision.action = snapshot.account.open_positions > 0 ? "CLOSE_ALL" : "LOCKED";
+        decision.reason = "Emergency stop is active";
+        return decision;
+    }
+
+    const bool daily_loss_limit_reached =
+        snapshot.account.day_start_balance > 0.0 &&
+        snapshot.account.day_pnl <=
+            -snapshot.account.day_start_balance * config.daily_loss_limit;
+    if (daily_loss_limit_reached) {
+        decision.action = snapshot.account.open_positions > 0 ? "CLOSE_ALL" : "LOCKED";
+        decision.reason = "Daily drawdown limit reached";
+        return decision;
+    }
+    if (config.trading_lock) {
+        decision.action = "LOCKED";
+        decision.reason = "Trading lock is active";
+        return decision;
+    }
+    if (!new_candle) {
+        decision.action = "WAIT";
+        decision.reason = "Waiting for a new closed candle";
+        return decision;
+    }
+    if (!observation.critical_data_available) {
+        decision.action = "BLOCKED";
+        decision.reason = "Market observation is incomplete";
+        return decision;
+    }
+    if (observation.spread_points > config.spread_limit_points) {
+        decision.action = "BLOCKED";
+        decision.reason = "Spread exceeds the configured limit";
+        return decision;
+    }
+    if (observation.volatility == "Elevated") {
+        decision.action = "BLOCKED";
+        decision.reason = "Volatility is elevated";
+        return decision;
+    }
+    if (snapshot.account.daily_trade_count >= config.max_daily_trades) {
+        decision.action = "LOCKED";
+        decision.reason = "Daily trade limit reached";
+        return decision;
+    }
+    if (snapshot.account.positions_without_stop > 0 ||
+        snapshot.account.positions_risk_unavailable > 0) {
+        decision.action = "BLOCKED";
+        decision.reason = "Open-position risk cannot be verified";
+        return decision;
+    }
+    if (!std::isfinite(snapshot.account.risk_at_stops) ||
+        !std::isfinite(snapshot.account.equity) ||
+        snapshot.account.equity <= 0.0) {
+        decision.action = "BLOCKED";
+        decision.reason = "Account risk data is invalid";
+        return decision;
+    }
+
+    const double current_open_risk_percent =
+        snapshot.account.risk_at_stops / snapshot.account.equity;
+    if (current_open_risk_percent + config.risk_per_trade >
+        config.max_open_risk_percent + 1e-12) {
+        decision.action = "BLOCKED";
+        decision.reason = "The new trade would exceed the total open-risk limit";
+        return decision;
+    }
+
+    const bool is_buy = observation.trend == "Bullish";
+    if (!is_buy && observation.trend != "Bearish") {
+        decision.action = "WAIT";
+        decision.reason = "Market trend is not directional";
+        return decision;
+    }
+
+    const double entry = is_buy ? snapshot.quote.ask : snapshot.quote.bid;
+    const double stop_distance =
+        observation.atr * config.stop_loss_atr_multiplier;
+    if (!std::isfinite(entry) || !std::isfinite(stop_distance) ||
+        entry <= 0.0 || stop_distance <= 0.0) {
+        decision.action = "BLOCKED";
+        decision.reason = "A valid ATR stop could not be calculated";
+        return decision;
+    }
+
+    decision.direction = is_buy ? "BUY" : "SELL";
+    decision.stop_loss =
+        is_buy ? entry - stop_distance : entry + stop_distance;
+    decision.take_profit =
+        is_buy ? entry + stop_distance * config.backtest_reward_risk
+               : entry - stop_distance * config.backtest_reward_risk;
+    if (decision.stop_loss <= 0.0 || decision.take_profit <= 0.0) {
+        decision.action = "BLOCKED";
+        decision.direction = "NO_TRADE";
+        decision.reason = "Calculated stop or target is invalid";
+        return decision;
+    }
+    decision.action = is_buy ? "OPEN_BUY" : "OPEN_SELL";
+    decision.reason = "Directional market observation passed configured risk checks";
+    return decision;
+}
+
 void validate_snapshot(const Snapshot& snapshot, const Config& config) {
     if (snapshot.symbol.empty() || snapshot.symbol.size() > 64 ||
         snapshot.timeframe.empty() || snapshot.timeframe.size() > 8) {
@@ -900,6 +1047,8 @@ void validate_snapshot(const Snapshot& snapshot, const Config& config) {
         snapshot.account.positions_risk_unavailable >
             snapshot.account.open_positions -
                 snapshot.account.positions_without_stop ||
+        snapshot.account.daily_trade_count < 0 ||
+        snapshot.account.daily_trade_count > 1000000 ||
         snapshot.account.open_volume < 0.0 ||
         snapshot.account.risk_at_stops < 0.0 ||
         snapshot.account.day_start_balance < 0.0 ||

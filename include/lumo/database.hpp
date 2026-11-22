@@ -30,6 +30,24 @@ struct ObservationRecord {
     std::string payload_json;
 };
 
+struct TradeEventRecord {
+    std::int64_t deal_ticket = 0;
+    std::int64_t position_id = 0;
+    std::int64_t order_id = 0;
+    std::int64_t account_login = 0;
+    std::int64_t magic = 0;
+    std::int64_t event_time = 0;
+    std::string account_server;
+    std::string symbol;
+    std::string direction;
+    std::string status;
+    double price = 0.0;
+    double stop_loss = 0.0;
+    double take_profit = 0.0;
+    double volume = 0.0;
+    double pnl = 0.0;
+};
+
 class Database {
 public:
     explicit Database(const std::string& path);
@@ -65,6 +83,10 @@ public:
     void update_trade_status(std::int64_t trade_id, const std::string& status,
                             std::optional<double> pnl = std::nullopt,
                             std::optional<std::string> closed_at = std::nullopt);
+    bool save_trade_event(const TradeEventRecord& event);
+    std::vector<TradeEventRecord> recent_trade_events(
+        int limit, std::int64_t account_login,
+        const std::string& account_server);
     void set_state(const std::string& key, const std::string& value);
     std::optional<std::string> get_state(const std::string& key);
 

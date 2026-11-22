@@ -26,8 +26,23 @@ function getBackendPaths() {
 function isHealthy() {
   return new Promise((resolve) => {
     const request = http.get(`${origin}/healthz`, (response) => {
-      response.resume();
-      resolve(response.statusCode === 200);
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        body += chunk;
+      });
+      response.on("end", () => {
+        try {
+          const health = JSON.parse(body);
+          resolve(
+            response.statusCode === 200 &&
+              health.status === "ok" &&
+              ["read-only", "guarded-auto-trading"].includes(health.mode),
+          );
+        } catch {
+          resolve(false);
+        }
+      });
     });
     request.setTimeout(800, () => request.destroy());
     request.on("error", () => resolve(false));
@@ -36,7 +51,7 @@ function isHealthy() {
 
 function waitForBackend() {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => finish(new Error("Lumo Edge server did not start within 30 seconds.")), 30000);
+    const timeout = setTimeout(() => finish(new Error("NEXUS server did not start within 30 seconds.")), 30000);
     const interval = setInterval(async () => {
       if (await isHealthy()) finish();
     }, 250);
@@ -53,13 +68,14 @@ function waitForBackend() {
 
     backend.once("error", (error) => finish(error));
     backend.once("exit", (code) => {
-      finish(new Error(`Lumo Edge server exited before becoming ready (code ${code ?? "unknown"}).`));
+      finish(new Error(`NEXUS server exited before becoming ready (code ${code ?? "unknown"}).`));
     });
   });
 }
 
 async function startBackend() {
   const paths = getBackendPaths();
+  if (await isHealthy()) return;
   const userData = app.getPath("userData");
   backend = spawn(paths.executable, [], {
     cwd: userData,
@@ -82,7 +98,7 @@ function createWindow() {
     height: 960,
     minWidth: 920,
     minHeight: 680,
-    title: "Lumo Edge",
+    title: "NEXUS",
     backgroundColor: "#0b1017",
     autoHideMenuBar: true,
     webPreferences: {
@@ -99,7 +115,7 @@ function createWindow() {
   window.loadURL(origin);
 }
 
-app.setAppUserModelId("com.lumoedge.desktop");
+app.setAppUserModelId("com.nexus.desktop");
 const hasSingleInstance = app.requestSingleInstanceLock();
 if (!hasSingleInstance) {
   app.quit();
@@ -120,7 +136,7 @@ if (!hasSingleInstance) {
       if (backend && !backend.killed) backend.kill();
       await dialog.showMessageBox({
         type: "error",
-        title: "Lumo Edge could not start",
+        title: "NEXUS could not start",
         message: error.message,
         detail: "Check that the desktop app is installed correctly and that port 8080 is available.",
       });

@@ -30,6 +30,25 @@ std::vector<lumo::Candle> make_candles(std::size_t count) {
     return candles;
 }
 
+lumo::Snapshot make_execution_snapshot() {
+    lumo::Snapshot snapshot;
+    snapshot.symbol = "XAUUSD";
+    snapshot.timeframe = "M5";
+    snapshot.account.server = "Broker-Demo";
+    snapshot.account.currency = "USD";
+    snapshot.account.balance = 10'000.0;
+    snapshot.account.equity = 10'000.0;
+    snapshot.account.day_start_balance = 10'000.0;
+    snapshot.account.login = 123456;
+    snapshot.account.trade_mode = 0;
+    snapshot.account.leverage = 100;
+    snapshot.account.daily_trade_count = 0;
+    snapshot.quote = {2300.0, 2300.1, 0.01, 2, lumo::unix_time_now()};
+    snapshot.candles = make_candles(260);
+    snapshot.received_at = lumo::unix_time_now();
+    return snapshot;
+}
+
 void test_ema() {
     const auto values = lumo::ema({1.0, 2.0, 3.0}, 3);
     assert(values.size() == 3);
@@ -82,6 +101,64 @@ void test_risk_controls_keep_execution_disabled() {
     assert(strict_risk.calculate_position_size(100.0, 2300.0, 2290.0) == 0.0);
 }
 
+void test_execution_decisions_enforce_mode_and_risk_limits() {
+    lumo::Config config;
+    auto snapshot = make_execution_snapshot();
+    snapshot.execution_enabled = true;
+    lumo::MarketObservation observation;
+    observation.critical_data_available = true;
+    observation.trend = "Bullish";
+    observation.atr = 2.0;
+    observation.spread_points = 10.0;
+
+    auto decision =
+        lumo::decide_execution(config, snapshot, observation, true, true);
+    assert(decision.action == "DISABLED");
+
+    config.auto_trading_enabled = true;
+    config.bridge_token = std::string(32, 't');
+    decision =
+        lumo::decide_execution(config, snapshot, observation, true, true);
+    assert(decision.action == "OPEN_BUY");
+    assert(decision.direction == "BUY");
+    assert(decision.stop_loss < snapshot.quote.ask);
+    assert(decision.take_profit > snapshot.quote.ask);
+
+    snapshot.account.trade_mode = 2;
+    decision =
+        lumo::decide_execution(config, snapshot, observation, true, true);
+    assert(decision.action == "LIVE_DISABLED");
+
+    config.live_trading_enabled = true;
+    snapshot.account.risk_at_stops = 250.0;
+    decision =
+        lumo::decide_execution(config, snapshot, observation, true, true);
+    assert(decision.action == "BLOCKED");
+    assert(decision.reason.find("open-risk") != std::string::npos);
+
+    snapshot.account.risk_at_stops = 0.0;
+    snapshot.account.daily_trade_count = config.max_daily_trades;
+    decision =
+        lumo::decide_execution(config, snapshot, observation, true, true);
+    assert(decision.action == "LOCKED");
+}
+
+void test_execution_closes_managed_positions_at_daily_limit() {
+    lumo::Config config;
+    config.auto_trading_enabled = true;
+    config.bridge_token = std::string(32, 't');
+    auto snapshot = make_execution_snapshot();
+    snapshot.execution_enabled = true;
+    snapshot.account.open_positions = 1;
+    snapshot.account.day_pnl = -1000.0;
+
+    lumo::MarketObservation observation;
+    const auto decision =
+        lumo::decide_execution(config, snapshot, observation, false, true);
+    assert(decision.action == "CLOSE_ALL");
+    assert(decision.reason == "Daily drawdown limit reached");
+}
+
 void test_risk_assessment_reports_stopless_positions_and_daily_limit() {
     lumo::Config config;
     lumo::Account account;
@@ -100,7 +177,7 @@ void test_risk_assessment_reports_stopless_positions_and_daily_limit() {
     assert(!risk.trade_lock);
     assert(risk.warnings.size() == 2);
 
-    account.day_pnl = -31.0;
+    account.day_pnl = -101.0;
     const auto locked_risk = lumo::assess_risk(config, account, 10.0);
     assert(locked_risk.trade_lock);
 }
@@ -257,6 +334,8 @@ int main() {
     test_strategy_requires_sufficient_data();
     test_strategy_returns_supported_direction();
     test_risk_controls_keep_execution_disabled();
+    test_execution_decisions_enforce_mode_and_risk_limits();
+    test_execution_closes_managed_positions_at_daily_limit();
     test_risk_assessment_reports_stopless_positions_and_daily_limit();
     test_account_matching_requires_login_and_server();
     test_market_observation_reports_real_market_features();

@@ -7,6 +7,13 @@ let refreshing = false;
 let lastState = null;
 let lastHistoryLoad = 0;
 let lastObservationLoad = 0;
+let lastTradeEventLoad = 0;
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+  });
+}
 
 function setText(id, value) {
   byId(id).textContent = value;
@@ -86,6 +93,54 @@ function renderHistory(signals) {
     body.appendChild(row);
   }
   setText("history-status", `Latest ${signals.length} signal records`);
+}
+
+function renderTradeEvents(events) {
+  const body = byId("trade-history");
+  while (body.firstChild) body.removeChild(body.firstChild);
+  if (!events.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 9;
+    cell.textContent = lastState?.connected
+      ? "No persisted trade events for this connected account."
+      : "Connect a verified MT5 account to view trade events.";
+    row.appendChild(cell);
+    body.appendChild(row);
+    setText("trade-history-status", lastState?.connected
+      ? "No trade events recorded"
+      : "Waiting for a connected MT5 account");
+    return;
+  }
+  for (const event of events) {
+    const date = new Date(Number(event.event_time) * 1000);
+    const digits = Number(lastState?.market?.digits);
+    const values = [
+      Number.isNaN(date.getTime()) ? String(event.event_time || "") : date.toLocaleString(),
+      event.ticket,
+      event.symbol,
+      event.direction,
+      event.status,
+      formatPrice(event.price, digits),
+      Number(event.volume).toLocaleString(undefined, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 8,
+      }),
+      `${formatPrice(event.stop_loss, digits)} · ${formatPrice(event.take_profit, digits)}`,
+      formatMoney(event.pnl, lastState?.account?.currency),
+    ];
+    const row = document.createElement("tr");
+    for (const value of values) {
+      const cell = document.createElement("td");
+      cell.textContent = value == null ? "" : String(value);
+      row.appendChild(cell);
+    }
+    const pnlCell = row.lastElementChild;
+    pnlCell.classList.toggle("negative", Number(event.pnl) < 0);
+    pnlCell.classList.toggle("positive", Number(event.pnl) > 0);
+    body.appendChild(row);
+  }
+  setText("trade-history-status", `Latest ${events.length} MT5 deal events · individual deal P&L, not aggregate strategy performance`);
 }
 
 function drawChart(candles) {
@@ -305,9 +360,10 @@ function renderObservability(data) {
   while (protocolList.firstChild) protocolList.removeChild(protocolList.firstChild);
   for (const [key, label] of protocolLabels) {
     const item = document.createElement("li");
-    const executionDisabled = key === "trade_execution" || key === "trade_approval";
+    const executionDisabled = (key === "trade_execution" || key === "trade_approval")
+      && !data.execution_enabled;
     const failedRiskCheck = key === "risk_checks_passed" && protocol && protocol.risk_assessment && !protocol[key];
-    item.textContent = `${label}: ${protocol && protocol[key] ? "complete" : executionDisabled ? "disabled (read-only)" : failedRiskCheck ? "failed (review alerts)" : "waiting / unavailable"}`;
+    item.textContent = `${label}: ${protocol && protocol[key] ? "complete" : executionDisabled ? "disabled (execution config off)" : failedRiskCheck ? "failed (review alerts)" : "waiting / unavailable"}`;
     if (protocol && protocol[key]) item.className = "complete";
     else if (failedRiskCheck) item.className = "blocked";
     else if (executionDisabled) item.className = "blocked";
@@ -347,7 +403,7 @@ function render(data) {
         : data.account.trade_mode === 2 ? "LIVE" : "Unknown")
     : "Not connected";
   setText("account-mode", data.account && Number(data.account.login) > 0
-    ? `MT5 #${data.account.login} · ${accountType} · Read-only`
+    ? `MT5 #${data.account.login} · ${accountType} · ${data.execution_enabled ? "Guarded auto" : "Read-only"}`
     : accountType);
 
   const expectedAccount = data.expected_account;
@@ -367,7 +423,9 @@ function render(data) {
   const notice = byId("notice");
   if (data.connected) {
     notice.className = "notice ok";
-    notice.textContent = "Connected to the matching MT5 account. This dashboard is read-only and never submits, modifies, or closes orders.";
+    notice.textContent = data.execution_enabled
+      ? "Connected to the matching MT5 account. Guarded automated execution is enabled; verify all order activity in MT5."
+      : "Connected to the matching MT5 account. Automated order execution is disabled.";
     setText("last-updated", `Updated ${new Date(data.updated_at * 1000).toLocaleTimeString()} · quote ${data.quote_age_seconds}s old`);
   } else if (connectionStatus === "account_mismatch") {
     notice.className = "notice error";
@@ -481,6 +539,18 @@ async function loadObservations() {
   }
 }
 
+async function loadTradeEvents() {
+  try {
+    const response = await fetch("/api/trades?limit=50", { cache: "no-store" });
+    if (!response.ok) throw new Error(`Trade history API returned HTTP ${response.status}`);
+    const data = await response.json();
+    renderTradeEvents(Array.isArray(data.trades) ? data.trades : []);
+    lastTradeEventLoad = Date.now();
+  } catch (error) {
+    setText("trade-history-status", `Trade history unavailable: ${error.message}`);
+  }
+}
+
 async function runBacktest() {
   const result = byId("backtest-result");
   if (!lastState || !lastState.connected) {
@@ -532,6 +602,7 @@ async function connectAccount(event) {
     feedback.textContent = data.message;
     await refresh();
     await loadObservations();
+    await loadTradeEvents();
   } catch (error) {
     feedback.className = "connection-feedback error";
     feedback.textContent = `Could not connect to MT5: ${error.message}`;
@@ -555,6 +626,7 @@ async function disconnectAccount() {
     byId("mt5-server").value = "";
     await refresh();
     await loadObservations();
+    await loadTradeEvents();
   } catch (error) {
     const feedback = byId("connection-feedback");
     feedback.className = "connection-feedback error";
@@ -590,7 +662,10 @@ byId("profile-form").addEventListener("submit", (event) => {
   byId("profile-dialog").close();
 });
 
-byId("refresh").addEventListener("click", refresh);
+byId("refresh").addEventListener("click", async () => {
+  await refresh();
+  await loadTradeEvents();
+});
 byId("run-backtest").addEventListener("click", runBacktest);
 byId("mt5-connection-form").addEventListener("submit", connectAccount);
 byId("disconnect-mt5").addEventListener("click", disconnectAccount);
@@ -598,8 +673,10 @@ showProfileDialog();
 refresh();
 loadHistory();
 loadObservations();
+loadTradeEvents();
 window.setInterval(() => {
   refresh();
   if (Date.now() - lastHistoryLoad >= 30000) loadHistory();
   if (Date.now() - lastObservationLoad >= 30000) loadObservations();
+  if (Date.now() - lastTradeEventLoad >= 30000) loadTradeEvents();
 }, 5000);

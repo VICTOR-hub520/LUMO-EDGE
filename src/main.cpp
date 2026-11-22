@@ -66,6 +66,18 @@ json observation_to_json(const lumo::MarketObservation& observation) {
     };
 }
 
+json execution_to_json(const lumo::ExecutionDecision& decision) {
+    return {
+        {"action", decision.action},
+        {"direction", decision.direction},
+        {"reason", decision.reason},
+        {"stop_loss", decision.stop_loss},
+        {"take_profit", decision.take_profit},
+        {"risk_per_trade", decision.risk_per_trade},
+        {"max_open_risk_percent", decision.max_open_risk_percent},
+    };
+}
+
 class AppState {
 public:
     AppState(lumo::Database& database, const lumo::Config& config)
@@ -89,23 +101,28 @@ public:
         connection_target_.reset();
     }
 
-    void update(lumo::Snapshot snapshot) {
+    lumo::ExecutionDecision update(lumo::Snapshot snapshot) {
         std::unique_lock lock(mutex_);
         if (snapshot_ &&
             snapshot.candles.back().time < snapshot_->candles.back().time) {
             throw std::invalid_argument("Snapshot candles are older than the current data");
         }
+        const bool connected_to_expected_account =
+            connection_target_ &&
+            lumo::account_matches(snapshot.account, connection_target_->first,
+                                 connection_target_->second);
         const bool new_candle =
             !snapshot_ ||
             snapshot_->candles.back().time != snapshot.candles.back().time;
-        if (new_candle && connection_target_ &&
-            lumo::account_matches(snapshot.account, connection_target_->first,
-                                  connection_target_->second)) {
+        const auto observation = lumo::observe_market(
+            snapshot.candles, snapshot.quote, snapshot.signal, config_,
+            snapshot.received_at);
+        last_execution_ = lumo::decide_execution(
+            config_, snapshot, observation, new_candle,
+            connected_to_expected_account);
+        if (new_candle && connected_to_expected_account) {
             database_.save_signal(snapshot.symbol, snapshot.signal.direction,
                                   snapshot.signal.confidence, snapshot.signal.reason);
-            const auto observation = lumo::observe_market(
-                snapshot.candles, snapshot.quote, snapshot.signal, config_,
-                snapshot.received_at);
             if (observation.critical_data_available) {
                 database_.evaluate_latest_observation(
                     snapshot.symbol, snapshot.candles.back().time,
@@ -129,6 +146,7 @@ public:
                           : " (critical data unavailable; execution blocked)"));
         }
         snapshot_ = std::move(snapshot);
+        return last_execution_;
     }
 
     json to_json(const lumo::Config& config) const {
@@ -140,6 +158,9 @@ public:
             {"timeframe", config.timeframe},
             {"port", config.port},
             {"bridge_token_required", !config.bridge_token.empty()},
+            {"execution_enabled",
+             config.auto_trading_enabled && snapshot_ &&
+                 snapshot_->execution_enabled},
             {"connected", false},
             {"connection_status", connection_target_ ? "waiting" : "disconnected"},
             {"connection_message",
@@ -158,6 +179,7 @@ public:
             {"observation", nullptr},
             {"alerts", json::array()},
             {"candles", json::array()},
+            {"execution", execution_to_json(last_execution_)},
         };
         if (!snapshot_) {
             return result;
@@ -193,7 +215,9 @@ public:
         result["connected"] = true;
         result["connection_status"] = "connected";
         result["connection_message"] =
-            "Connected to the matching MT5 account. The dashboard is read-only.";
+            config.auto_trading_enabled
+                ? "Connected to the matching MT5 account. Automated execution is guarded by the configured risk limits."
+                : "Connected to the matching MT5 account. Trade execution is disabled.";
         result["expected_account"] = {
             {"login", connection_target_->first},
             {"server", connection_target_->second},
@@ -243,6 +267,7 @@ public:
         const auto observation = lumo::observe_market(
             snapshot.candles, snapshot.quote, snapshot.signal, config_,
             snapshot.received_at);
+        result["execution"] = execution_to_json(last_execution_);
         result["observation"] = observation_to_json(observation);
         if (!observation.critical_data_available) {
             result["alerts"].push_back(
@@ -307,13 +332,15 @@ public:
             {"signal_generation", observation.critical_data_available},
             {"risk_assessment", true},
             {"risk_checks_passed", risk.warnings.empty()},
-            {"trade_approval", false},
+            {"trade_approval",
+             last_execution_.action == "OPEN_BUY" ||
+                 last_execution_.action == "OPEN_SELL"},
             {"trade_execution", false},
             {"market_monitoring", observation.critical_data_available},
             {"trade_closure", false},
             {"post_trade_analysis", false},
             {"performance_report", true},
-            {"execution_status", "Disabled: local dashboard is read-only"},
+            {"execution_status", last_execution_.reason},
         };
         for (const auto& candle : snapshot.candles) {
             result["candles"].push_back({
@@ -351,6 +378,17 @@ public:
         return connection_target_;
     }
 
+    bool matches_connected_account(std::int64_t login,
+                                   const std::string& server) const {
+        std::shared_lock lock(mutex_);
+        return snapshot_ && connection_target_ &&
+               snapshot_is_current(*snapshot_) &&
+               lumo::account_matches(snapshot_->account, login, server) &&
+               lumo::account_matches(snapshot_->account,
+                                     connection_target_->first,
+                                     connection_target_->second);
+    }
+
 private:
     static bool snapshot_is_current(const lumo::Snapshot& snapshot) {
         const auto age_seconds = lumo::unix_time_now() - snapshot.received_at;
@@ -364,6 +402,7 @@ private:
     mutable std::shared_mutex mutex_;
     std::optional<lumo::Snapshot> snapshot_;
     std::optional<std::pair<std::int64_t, std::string>> connection_target_;
+    lumo::ExecutionDecision last_execution_;
 };
 
 void send_json(httplib::Response& response, int status, const json& body) {
@@ -412,6 +451,7 @@ lumo::Snapshot parse_snapshot(const json& body, const lumo::Config& config) {
     lumo::Snapshot snapshot;
     snapshot.symbol = body.at("symbol").get<std::string>();
     snapshot.timeframe = body.at("timeframe").get<std::string>();
+    snapshot.execution_enabled = body.at("execution_enabled").get<bool>();
 
     const auto& account = body.at("account");
     const auto& quote = body.at("quote");
@@ -440,6 +480,8 @@ lumo::Snapshot parse_snapshot(const json& body, const lumo::Config& config) {
         account.at("positions_risk_unavailable").get<int>();
     snapshot.account.trade_mode = account.at("trade_mode").get<int>();
     snapshot.account.leverage = account.at("leverage").get<int>();
+    snapshot.account.daily_trade_count =
+        account.at("daily_trade_count").get<int>();
     snapshot.quote.bid = require_finite_number(quote, "bid");
     snapshot.quote.ask = require_finite_number(quote, "ask");
     snapshot.quote.point = require_finite_number(quote, "point");
@@ -486,7 +528,7 @@ int main(int argc, char** argv) {
             return 2;
         }
         if (argc == 2 && std::string_view(argv[1]) == "--help") {
-            std::cout << "Lumo Edge read-only MT5 dashboard\n"
+            std::cout << "NEXUS MT5 market dashboard\n"
                          "Usage: lumo-edge [--help|--version|--check-config]\n"
                          "Run from the project root. Optional settings are read "
                          "from .env and process environment.\n";
@@ -496,7 +538,7 @@ int main(int argc, char** argv) {
 #ifndef LUMO_EDGE_VERSION
 #define LUMO_EDGE_VERSION "unknown"
 #endif
-            std::cout << "Lumo Edge " << LUMO_EDGE_VERSION << std::endl;
+            std::cout << "NEXUS " << LUMO_EDGE_VERSION << std::endl;
             return 0;
         }
         if (argc == 2 && std::string_view(argv[1]) != "--check-config") {
@@ -533,7 +575,11 @@ int main(int argc, char** argv) {
                                          httplib::Response& response) {
             send_json(response, 200,
                       {{"status", "ok"},
-                       {"mode", "read-only"},
+                       {"mode", config.auto_trading_enabled
+                                    ? "guarded-auto-trading"
+                                    : "read-only"},
+                       {"auto_trading_enabled", config.auto_trading_enabled},
+                       {"live_trading_enabled", config.live_trading_enabled},
                        {"bridge_auth_required", !config.bridge_token.empty()}});
         });
         server.Get("/api/state", [&state, &config](const httplib::Request&,
@@ -682,6 +728,57 @@ int main(int argc, char** argv) {
                                      {{"error", "Could not load market observations"}});
                        }
                    });
+        server.Get("/api/trades",
+                   [&database, &state](const httplib::Request& request,
+                                      httplib::Response& response) {
+                       try {
+                           const auto account = state.observation_history_account();
+                           if (!account) {
+                               send_json(response, 200, {{"trades", json::array()}});
+                               return;
+                           }
+                           int limit = 50;
+                           if (request.has_param("limit")) {
+                               const auto value = request.get_param_value("limit");
+                               const auto parsed = std::from_chars(
+                                   value.data(), value.data() + value.size(), limit);
+                               if (parsed.ec != std::errc{} ||
+                                   parsed.ptr != value.data() + value.size() ||
+                                   limit < 1 || limit > 100) {
+                                   send_json(response, 400,
+                                             {{"error", "limit must be an integer from 1 to 100"}});
+                                   return;
+                               }
+                           }
+                           json rows = json::array();
+                           for (const auto& event : database.recent_trade_events(
+                                    limit, account->first, account->second)) {
+                               rows.push_back({
+                                   {"ticket", event.deal_ticket},
+                                   {"position_id", event.position_id},
+                                   {"order_id", event.order_id},
+                                   {"login", event.account_login},
+                                   {"server", event.account_server},
+                                   {"magic", event.magic},
+                                   {"symbol", event.symbol},
+                                   {"direction", event.direction},
+                                   {"status", event.status},
+                                   {"price", event.price},
+                                   {"stop_loss", event.stop_loss},
+                                   {"take_profit", event.take_profit},
+                                   {"volume", event.volume},
+                                   {"pnl", event.pnl},
+                                   {"event_time", event.event_time},
+                               });
+                           }
+                           send_json(response, 200, {{"trades", std::move(rows)}});
+                       } catch (const std::exception& error) {
+                           log_line(std::string("Loading trade events failed: ") +
+                                    error.what());
+                           send_json(response, 500,
+                                     {{"error", "Could not load trade history"}});
+                       }
+                   });
         server.Get("/api/backtest", [&state, &config](const httplib::Request&,
                                                       httplib::Response& response) {
             try {
@@ -726,11 +823,11 @@ int main(int argc, char** argv) {
                         try {
                             const auto body = json::parse(request.body);
                             auto snapshot = parse_snapshot(body, config);
+                            const auto execution = state.update(std::move(snapshot));
                             const json accepted = {
                                 {"accepted", true},
-                                {"direction", snapshot.signal.direction},
+                                {"execution", execution_to_json(execution)},
                             };
-                            state.update(std::move(snapshot));
                             send_json(response, 200, accepted);
                         } catch (const json::exception& error) {
                             send_json(response, 400,
@@ -743,6 +840,106 @@ int main(int argc, char** argv) {
                             send_json(response, 500, {{"error", "Snapshot processing failed"}});
                         }
                     });
+        server.Post("/api/mt5/trade-event",
+                    [&database, &state, &config](
+                        const httplib::Request& request,
+                        httplib::Response& response) {
+                        if (!bridge_request_authorized(request, config)) {
+                            send_json(response, 401,
+                                      {{"error", "Invalid bridge authorization"}});
+                            return;
+                        }
+                        if (request.get_header_value("Content-Type")
+                                .find("application/json") == std::string::npos) {
+                            send_json(response, 415,
+                                      {{"error", "Content-Type must be application/json"}});
+                            return;
+                        }
+                        try {
+                            const auto body = json::parse(request.body);
+                            if (!body.is_object() ||
+                                !body.contains("ticket") ||
+                                !body.at("ticket").is_number_integer() ||
+                                !body.contains("position_id") ||
+                                !body.at("position_id").is_number_integer() ||
+                                !body.contains("order_id") ||
+                                !body.at("order_id").is_number_integer() ||
+                                !body.contains("login") ||
+                                !body.at("login").is_number_integer() ||
+                                !body.contains("magic") ||
+                                !body.at("magic").is_number_integer() ||
+                                !body.contains("event_time") ||
+                                !body.at("event_time").is_number_integer() ||
+                                !body.contains("server") ||
+                                !body.at("server").is_string() ||
+                                !body.contains("symbol") ||
+                                !body.at("symbol").is_string() ||
+                                !body.contains("direction") ||
+                                !body.at("direction").is_string() ||
+                                !body.contains("status") ||
+                                !body.at("status").is_string()) {
+                                throw std::invalid_argument(
+                                    "Trade event is missing required fields or has invalid field types");
+                            }
+                            lumo::TradeEventRecord event;
+                            event.deal_ticket = body.at("ticket").get<std::int64_t>();
+                            event.position_id =
+                                body.at("position_id").get<std::int64_t>();
+                            event.order_id = body.at("order_id").get<std::int64_t>();
+                            event.account_login = body.at("login").get<std::int64_t>();
+                            event.magic = body.at("magic").get<std::int64_t>();
+                            event.event_time = body.at("event_time").get<std::int64_t>();
+                            event.account_server =
+                                body.at("server").get<std::string>();
+                            event.symbol = body.at("symbol").get<std::string>();
+                            event.direction = body.at("direction").get<std::string>();
+                            event.status = body.at("status").get<std::string>();
+                            event.price = require_finite_number(body, "price");
+                            event.stop_loss = require_finite_number(body, "stop_loss");
+                            event.take_profit =
+                                require_finite_number(body, "take_profit");
+                            event.volume = require_finite_number(body, "volume");
+                            event.pnl = require_finite_number(body, "pnl");
+                            if (event.deal_ticket <= 0 || event.position_id <= 0 ||
+                                event.order_id <= 0 || event.account_login <= 0 ||
+                                event.magic <= 0 || event.event_time <= 0 ||
+                                event.account_server.empty() ||
+                                event.account_server.size() > 128 ||
+                                event.symbol.empty() || event.symbol.size() > 64 ||
+                                (event.direction != "BUY" &&
+                                 event.direction != "SELL") ||
+                                (event.status != "OPENED" &&
+                                 event.status != "CLOSED" &&
+                                 event.status != "REVERSED" &&
+                                 event.status != "FILL") ||
+                                event.price <= 0.0 || event.volume <= 0.0 ||
+                                event.stop_loss < 0.0 || event.take_profit < 0.0) {
+                                throw std::invalid_argument(
+                                    "Trade event contains invalid values");
+                            }
+                            if (!state.matches_connected_account(
+                                    event.account_login, event.account_server)) {
+                                send_json(response, 409,
+                                          {{"error", "Trade event account does not match the connected MT5 account"}});
+                                return;
+                            }
+                            const bool inserted = database.save_trade_event(event);
+                            send_json(response, inserted ? 201 : 200,
+                                      {{"accepted", true},
+                                       {"duplicate", !inserted}});
+                        } catch (const json::exception& error) {
+                            send_json(response, 400,
+                                      {{"error", std::string("Invalid trade event JSON: ") +
+                                                     error.what()}});
+                        } catch (const std::invalid_argument& error) {
+                            send_json(response, 400, {{"error", error.what()}});
+                        } catch (const std::exception& error) {
+                            log_line(std::string("Saving trade event failed: ") +
+                                     error.what());
+                            send_json(response, 500,
+                                      {{"error", "Could not save trade event"}});
+                        }
+                    });
 
         const auto configured_web_root = read_environment("LUMO_WEB_ROOT");
         const std::string web_root =
@@ -752,7 +949,7 @@ int main(int argc, char** argv) {
         if (!server.set_mount_point("/", web_root)) {
             throw std::runtime_error("Could not mount the web/ dashboard directory");
         }
-        log_line("Starting read-only dashboard at http://127.0.0.1:" +
+        log_line("Starting local dashboard at http://127.0.0.1:" +
                  std::to_string(config.port));
         log_line("MT5 bridge endpoint: http://127.0.0.1:" +
                  std::to_string(config.port) + "/api/mt5/snapshot");
